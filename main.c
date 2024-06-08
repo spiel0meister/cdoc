@@ -270,14 +270,14 @@ int main(int argc, char** argv) {
         }
 
 
-        char out_filename[1024];
+        char out_filepath[1024] = {};
         char* filename_md = path_with_ext(file->name, ".md");
-        sprintf(out_filename, "docs/%s", filename_md);
-        FILE* out = fopen(out_filename, "w");
+        sprintf(out_filepath, "docs/%s", filename_md);
+        FILE* out = fopen(out_filepath, "w");
         fwrite(sb.items, 1, sb.size, out);
         fclose(out);
-        free(filename_md);
         sbuilder_free(&sb);
+        free(filename_md);
 
         da_free(&fdoc_list);
         da_free(&structdoc_list);
