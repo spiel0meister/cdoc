@@ -1,6 +1,6 @@
 # cdoc
 
-Documentation generator for C programs.
+Documentation generator for C.
 
 ## Building
 ```console
