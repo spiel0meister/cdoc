@@ -9,8 +9,8 @@
     #define DT_DIR 4
 #endif // DT_DIR
 
-#include "tree_sitter.h"
-#include "tree-sitter-c/bindings/c/tree-sitter-c.h"
+#include "include/tree_sitter.h"
+#include "include/tree-sitter-c.h"
 
 #define SBUILDER_IMPLEMENTATION
 #include "string_builder.h"
@@ -23,11 +23,12 @@
 char* readfile(const char* filepath) {
     FILE *f = fopen(filepath, "rb");
     fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
+    size_t fsize = ftell(f);
     fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
 
     char *string = malloc(fsize + 1);
-    fread(string, fsize, 1, f);
+    size_t _n = fread(string, fsize, 1, f);
+    (void)_n;
     fclose(f);
 
     string[fsize] = 0;

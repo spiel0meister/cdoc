@@ -75,6 +75,8 @@ bool cmd_run_sync(Cmd* cmd, bool log_cmd);
 
 // Displays a CMD to stdout
 void cmd_display(Cmd* cmd);
+// Frees from the CMD allocated memory
+void cmd_free(Cmd* cmd);
 
 #define CMD(out, ...) do { \
         const char* args[] = { __VA_ARGS__, NULL }; \
@@ -305,6 +307,13 @@ bool pid_wait(int pid) {
 bool cmd_run_sync(Cmd* cmd, bool log_cmd) {
     int pid = cmd_run_async(cmd, log_cmd);
     return pid_wait(pid);
+}
+
+void cmd_free(Cmd* cmd) {
+    free(cmd->items);
+    cmd->items = NULL;
+    cmd->count = 0;
+    cmd->capacity = 0;
 }
 
 void cmd_display(Cmd* cmd) {
