@@ -1,3 +1,5 @@
 cbuild
 cdoc
 docs/
+tree-sitter-c/
+tree-sitter/
