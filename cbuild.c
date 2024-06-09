@@ -6,7 +6,7 @@
 
 void cflags(Cmd* cmd, bool debug) {
     if (debug) cmd_push_str(cmd, "-ggdb");
-    else cmd_push_str(cmd, "-O3");
+    else cmd_push_str(cmd, "-O2");
     cmd_push_str(cmd, "-std=c2x", "-Wall", "-Wextra");
 }
 
