@@ -45,11 +45,13 @@ size_t node_get_text(char* out, TSNode node, const char* source) {
     return len;
 }
 
-#define DOC_FUNCS_QUERY "((comment)? @comment . (declaration declarator: (function_declarator declarator: (identifier) @name)) @func)"
+#define DOC_FUNCS_QUERY "((comment)* @comment . (declaration declarator: (function_declarator declarator: (identifier) @name)) @func)"
 typedef struct {
     char name[1024];
     char func[1024];
-    char comment[1024];
+
+    char* comment_start;
+    size_t comment_len;
 }FunctionDoc;
 
 typedef struct {
@@ -58,11 +60,13 @@ typedef struct {
     size_t capacity;
 }FunctionDocList;
 
-#define DOC_TYPEDEF_QUERY "((comment)? @comment . (type_definition declarator: (type_identifier) @name) @struct)"
+#define DOC_TYPEDEF_QUERY "((comment)* @comment . (type_definition declarator: (type_identifier) @name) @struct)"
 typedef struct {
     char name[1024];
     char typedef_[1024];
-    char comment[1024];
+
+    char* comment_start;
+    size_t comment_len;
 }TypedefDoc;
 
 typedef struct {
@@ -71,11 +75,13 @@ typedef struct {
     size_t capacity;
 }TypedefDocList;
 
-#define DOC_MACRO_QUERY "((comment)? @comment . [(preproc_def name: (identifier) @name) (preproc_function_def name: (identifier) @name)] @def)"
+#define DOC_MACRO_QUERY "((comment)* @comment . [(preproc_def name: (identifier) @name) (preproc_function_def name: (identifier) @name)] @def)"
 typedef struct {
     char name[1024];
     char def[1024];
-    char comment[1024];
+
+    char* comment_start;
+    size_t comment_len;
 }MacroDoc;
 
 typedef struct {
@@ -130,7 +136,7 @@ int main(int argc, char** argv) {
     const char* program = *argv++; argc--;
 
     if (argc == 0) {
-        printf("Usage: %s <filepath>\n", program);
+        printf("Usage: %s <dirpath>\n", program);
         return 1;
     }
     const char* dirname = *argv++; argc--;
@@ -160,6 +166,7 @@ int main(int argc, char** argv) {
         TSQueryMatch match;
         while (ts_query_cursor_next_match(cursor, &match)) {
             FunctionDoc doc = {};
+            size_t comment_len = 0;
             for (int i = 0; i < match.capture_count; ++i) {
                 TSQueryCapture capture = match.captures[i];
                 TSNode node = capture.node;
@@ -167,7 +174,12 @@ int main(int argc, char** argv) {
                 const char* capture_name = ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
 
                 if (strcmp(capture_name, "comment") == 0) {
-                    node_get_text(doc.comment, node, code);
+                    uint32_t start = ts_node_start_byte(node);
+                    uint32_t end = ts_node_end_byte(node);
+                    if (doc.comment_start == NULL) {
+                        doc.comment_start = code + start;
+                    }
+                    comment_len += end - start;
                 } else if (strcmp(capture_name, "func") == 0) {
                     node_get_text(doc.func, node, code);
                 } else if (strcmp(capture_name, "name") == 0) {
@@ -176,6 +188,7 @@ int main(int argc, char** argv) {
                     assert(0);
                 }
             }
+            doc.comment_len = comment_len;
 
             da_append(&fdoc_list, doc);
         }
@@ -188,6 +201,7 @@ int main(int argc, char** argv) {
         TypedefDocList structdoc_list = {};
         while (ts_query_cursor_next_match(cursor, &match)) {
             TypedefDoc doc = {};
+            size_t comment_len = 0;
             for (int i = 0; i < match.capture_count; ++i) {
                 TSQueryCapture capture = match.captures[i];
                 TSNode node = capture.node;
@@ -195,7 +209,12 @@ int main(int argc, char** argv) {
                 const char* capture_name = ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
 
                 if (strcmp(capture_name, "comment") == 0) {
-                    node_get_text(doc.comment, node, code);
+                    uint32_t start = ts_node_start_byte(node);
+                    uint32_t end = ts_node_end_byte(node);
+                    if (doc.comment_start == NULL) {
+                        doc.comment_start = code + start;
+                    }
+                    comment_len += end - start;
                 } else if (strcmp(capture_name, "struct") == 0) {
                     node_get_text(doc.typedef_, node, code);
                 } else if (strcmp(capture_name, "name") == 0) {
@@ -204,6 +223,7 @@ int main(int argc, char** argv) {
                     assert(0);
                 }
             }
+            doc.comment_len = comment_len;
 
             da_append(&structdoc_list, doc);
         }
@@ -216,6 +236,7 @@ int main(int argc, char** argv) {
         MacroDocList macrodoc_list = {};
         while (ts_query_cursor_next_match(cursor, &match)) {
             MacroDoc doc = {};
+            size_t comment_len = 0;
             for (int i = 0; i < match.capture_count; ++i) {
                 TSQueryCapture capture = match.captures[i];
                 TSNode node = capture.node;
@@ -223,7 +244,12 @@ int main(int argc, char** argv) {
                 const char* capture_name = ts_query_capture_name_for_id(query, capture.index, &capture_name_len);
 
                 if (strcmp(capture_name, "comment") == 0) {
-                    node_get_text(doc.comment, node, code);
+                    uint32_t start = ts_node_start_byte(node);
+                    uint32_t end = ts_node_end_byte(node);
+                    if (doc.comment_start == NULL) {
+                        doc.comment_start = code + start;
+                    }
+                    comment_len += end - start;
                 } else if (strcmp(capture_name, "def") == 0) {
                     node_get_text(doc.def, node, code);
                 } else if (strcmp(capture_name, "name") == 0) {
@@ -232,6 +258,7 @@ int main(int argc, char** argv) {
                     assert(0);
                 }
             }
+            doc.comment_len = comment_len;
 
             da_append(&macrodoc_list, doc);
         }
@@ -242,18 +269,21 @@ int main(int argc, char** argv) {
         da_foreach(&structdoc_list, TypedefDoc, doc) {
             sbuilder_push_str(&sb, "### ", doc->name, "\n");
             sbuilder_push_str(&sb, "```c\n", doc->typedef_, "\n```\n");
-            if (*doc->comment != 0) {
-                sbuilder_push_str(&sb, doc->comment + 3);
+            if (doc->comment_start != NULL) {
+                sbuilder_push_nstr(&sb, doc->comment_start, doc->comment_len);
+                sbuilder_push_str(&sb, "\n\n");
+            } else {
+                sbuilder_push_str(&sb, "\n");
             }
-            sbuilder_push_str(&sb, "\n");
         }
 
         sbuilder_push_str(&sb, "## Functions\n");
         da_foreach(&fdoc_list, FunctionDoc, doc) {
             sbuilder_push_str(&sb, "### ", doc->name, "\n");
             sbuilder_push_str(&sb, "```c\n", doc->func, "\n```\n");
-            if (*doc->comment != 0) {
-                sbuilder_push_str(&sb, doc->comment + 3, "\n\n");
+            if (doc->comment_start != NULL) {
+                sbuilder_push_nstr(&sb, doc->comment_start, doc->comment_len);
+                sbuilder_push_str(&sb, "\n\n");
             } else {
                 sbuilder_push_str(&sb, "\n");
             }
@@ -263,8 +293,9 @@ int main(int argc, char** argv) {
         da_foreach(&macrodoc_list, MacroDoc, doc) {
             sbuilder_push_str(&sb, "### ", doc->name, "\n");
             sbuilder_push_str(&sb, "```c\n", doc->def, "\n```\n");
-            if (*doc->comment != 0) {
-                sbuilder_push_str(&sb, doc->comment + 3, "\n\n");
+            if (doc->comment_start != NULL) {
+                sbuilder_push_nstr(&sb, doc->comment_start, doc->comment_len);
+                sbuilder_push_str(&sb, "\n\n");
             } else {
                 sbuilder_push_str(&sb, "\n");
             }
