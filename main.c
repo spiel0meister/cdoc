@@ -9,7 +9,7 @@
     #define DT_DIR 4
 #endif // DT_DIR
 
-#include "include/tree_sitter.h"
+#include "include/tree-sitter.h"
 #include "include/tree-sitter-c.h"
 
 #define SBUILDER_IMPLEMENTATION
@@ -19,31 +19,6 @@
 #include "cbuild.h"
 
 #include "da.h"
-
-char* readfile(const char* filepath) {
-    FILE *f = fopen(filepath, "rb");
-    fseek(f, 0, SEEK_END);
-    size_t fsize = ftell(f);
-    fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
-
-    char *string = malloc(fsize + 1);
-    size_t _n = fread(string, fsize, 1, f);
-    (void)_n;
-    fclose(f);
-
-    string[fsize] = 0;
-
-    return string;
-}
-
-size_t node_get_text(char* out, TSNode node, const char* source) {
-    uint32_t start_offset = ts_node_start_byte(node);
-    uint32_t end_offset = ts_node_end_byte(node);
-    int len = end_offset - start_offset;
-    assert(len >= 0);
-    memcpy(out, source + start_offset, len);
-    return len;
-}
 
 #define DOC_FUNCS_QUERY "((comment)* @comment . (declaration declarator: (function_declarator declarator: (identifier) @name)) @func)"
 typedef struct {
@@ -101,11 +76,49 @@ typedef struct {
     size_t capacity;
 }FileList;
 
+char* readfile(const char* filepath) {
+    FILE *f = fopen(filepath, "rb");
+    fseek(f, 0, SEEK_END);
+    size_t fsize = ftell(f);
+    fseek(f, 0, SEEK_SET);  /* same as rewind(f); */
+
+    char *string = malloc(fsize + 1);
+    size_t _n = fread(string, fsize, 1, f);
+    (void)_n;
+    fclose(f);
+
+    string[fsize] = 0;
+
+    return string;
+}
+
+size_t node_get_text(char* out, TSNode node, const char* source) {
+    uint32_t start_offset = ts_node_start_byte(node);
+    uint32_t end_offset = ts_node_end_byte(node);
+    int len = end_offset - start_offset;
+    assert(len >= 0);
+    memcpy(out, source + start_offset, len);
+    return len;
+}
+
 void find_header_files(FileList* files, const char* path) {
     DIR* dir = opendir(path);
     if (dir == NULL) {
-        fprintf(stderr, "[ERROR] couldn't open directory: %s\n", strerror(errno));
-        exit(1);
+        switch (errno) {
+            case EACCES:
+            case EBADF:
+                printf("[WARN] couldn't open directory %s: %s\n", path, strerror(errno));
+                return;
+            case EMFILE:
+            case ENFILE:
+                printf("[ERROR] couldn't open directory %s: %s\n", path, strerror(errno));
+                exit(1);
+            case ENOMEM:
+                assert(0 && "Buy more ram lol!");
+            case ENOENT:
+            case ENOTDIR:
+                assert(0);
+        }
     }
 
     struct dirent* dirent_ = readdir(dir);
@@ -129,6 +142,8 @@ void find_header_files(FileList* files, const char* path) {
 while_end:
         dirent_ = readdir(dir);
     }
+
+    closedir(dir);
 }
 
 int main(int argc, char** argv) {
@@ -149,6 +164,7 @@ int main(int argc, char** argv) {
 
     if (!create_dir_if_not_exists("docs/")) return 1;
     da_foreach(&files, File, file) {
+        printf("[INFO] processing %s\n", file->path);
         char* code = readfile(file->path);
 
         TSTree* tree = ts_parser_parse_string(parser, NULL, code, strlen(code));
