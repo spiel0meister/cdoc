@@ -26,6 +26,13 @@ typedef struct {
     bool debug;
 }Config;
 
+void usage(void) {
+    printf("Usage: ./cbuild [options]\n");
+    printf("    -h: print this help\n");
+    printf("    -D: build with debug symbols (for GDB)\n");
+    printf("    -F: force building\n");
+}
+
 Config parse_config(int argc, char** argv) {
     Config config = { .debug = false, .force = false };
 
@@ -35,8 +42,13 @@ Config parse_config(int argc, char** argv) {
         if (arg[0] == '-') {
             if (strcmp(arg, "-F") == 0) config.force = true;
             else if (strcmp(arg, "-D") == 0) config.debug = true;
-            else {
-                printf("[WARN] unknown flag: %s\n", arg);
+            else if (strcmp(arg, "-h") == 0) {
+                usage(); 
+                exit(0);
+            } else {
+                printf("[ERROR] unknown flag: %s\n", arg);
+                usage(); 
+                exit(1);
             } 
         }
     }
